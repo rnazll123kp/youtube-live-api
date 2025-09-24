@@ -49,7 +49,7 @@ def download_subtitle(req: VideoRequest):
         "writeautomaticsub": True,
         "subtitleslangs": [req.lang],
         "outtmpl": output_file,
-        "cookiefile": COOKIES_FILE,  # <-- use your cookies
+        "cookiefile": COOKIES_FILE,
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -62,11 +62,10 @@ def download_subtitle(req: VideoRequest):
     if not os.path.exists(subtitle_path):
         return {"error": "Subtitle not found."}
 
-    # Return public URL instead of local path
     public_url = f"https://youtube-live-api-57jx.onrender.com/subtitles/{subtitle_file_name}"
     return {"subtitleUrl": public_url, "videoUrl": req.videoUrl}
 
-# Download a specific highlight clip
+# Download a specific highlight clip (sequential, blocking)
 @app.post("/download-clip")
 def download_clip(req: ClipRequest):
     """Download only the required segment of a YouTube video."""
@@ -77,16 +76,17 @@ def download_clip(req: ClipRequest):
         req.videoUrl,
         "--download-sections", section,
         "-o", clip_path,
-        "--cookies", COOKIES_FILE  # <-- use cookies for restricted videos
+        "--cookies", COOKIES_FILE,
     ]
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as e:
         return {"error": str(e)}
 
-    return {"clipPath": clip_path}
+    # Return JSON with final clip path (sequential ready for n8n upload step)
+    return {"clipPath": clip_path, "outputName": req.outputName}
 
-# Add subtitles to a clip
+# Add subtitles to a clip (optional)
 @app.post("/add-subtitles")
 def add_subtitles(clipPath: str, subtitlePath: str):
     """Embed subtitles into the clip."""
@@ -108,3 +108,4 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
