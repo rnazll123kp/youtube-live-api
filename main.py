@@ -30,7 +30,7 @@ class ClipRequest(BaseModel):
 def root():
     return {"message": "YouTube Live API with cookies is running!"}
 
-# Serve subtitles publicly
+# Serve subtitles publicly (for Gemini only)
 @app.get("/subtitles/{filename}")
 def get_subtitle(filename: str):
     file_path = os.path.join(TMP_DIR, filename)
@@ -38,10 +38,9 @@ def get_subtitle(filename: str):
         return FileResponse(file_path, media_type="text/vtt")
     return {"error": "File not found"}
 
-# Download subtitles only
+# Download subtitles only (for Gemini highlights analysis)
 @app.post("/download-subtitle")
 def download_subtitle(req: VideoRequest):
-    """Download subtitles only from YouTube video using cookies."""
     output_file = os.path.join(TMP_DIR, "video.%(ext)s")
     ydl_opts = {
         "skip_download": True,
@@ -65,16 +64,15 @@ def download_subtitle(req: VideoRequest):
     public_url = f"https://youtube-live-api-57jx.onrender.com/subtitles/{subtitle_file_name}"
     return {"subtitleUrl": public_url, "videoUrl": req.videoUrl}
 
-# Download a specific highlight clip (sequential, blocking)
+# Download a specific highlight clip
 @app.post("/download-clip")
 def download_clip(req: ClipRequest):
-    """Download only the required segment of a YouTube video."""
     clip_path = os.path.join(TMP_DIR, req.outputName)
     section = f"*{req.start}-{req.end}"
     cmd = [
         "yt-dlp",
         req.videoUrl,
-        "--download-sections", section,
+        f"--download-sections={section}",
         "-o", clip_path,
         "--cookies", COOKIES_FILE,
     ]
@@ -83,29 +81,21 @@ def download_clip(req: ClipRequest):
     except subprocess.CalledProcessError as e:
         return {"error": str(e)}
 
-    # Return JSON with final clip path (sequential ready for n8n upload step)
     return {"clipPath": clip_path, "outputName": req.outputName}
 
-# Add subtitles to a clip (optional)
-@app.post("/add-subtitles")
-def add_subtitles(clipPath: str, subtitlePath: str):
-    """Embed subtitles into the clip."""
-    final_clip = clipPath.replace(".mp4", "_sub.mp4")
-    cmd = [
-        "ffmpeg",
-        "-i", clipPath,
-        "-vf", f"subtitles={subtitlePath}",
-        final_clip
-    ]
-    try:
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError as e:
-        return {"error": str(e)}
-    return {"finalClipPath": final_clip}
+# Cleanup endpoint
+@app.post("/cleanup")
+def cleanup_files(files: list[str]):
+    deleted = []
+    for f in files:
+        path = os.path.join(TMP_DIR, f)
+        if os.path.exists(path):
+            os.remove(path)
+            deleted.append(f)
+    return {"deleted": deleted}
 
-# Start server (Render uses PORT environment variable)
+# Start server
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
-
