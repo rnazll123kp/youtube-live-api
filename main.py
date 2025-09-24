@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import yt_dlp
 import subprocess
@@ -29,6 +30,14 @@ class ClipRequest(BaseModel):
 def root():
     return {"message": "YouTube Live API with cookies is running!"}
 
+# Serve subtitles publicly
+@app.get("/subtitles/{filename}")
+def get_subtitle(filename: str):
+    file_path = os.path.join(TMP_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type="text/vtt")
+    return {"error": "File not found"}
+
 # Download subtitles only
 @app.post("/download-subtitle")
 def download_subtitle(req: VideoRequest):
@@ -48,11 +57,14 @@ def download_subtitle(req: VideoRequest):
     except yt_dlp.utils.DownloadError as e:
         return {"error": str(e)}
 
-    subtitle_file = os.path.join(TMP_DIR, f"video.{req.lang}.vtt")
-    if not os.path.exists(subtitle_file):
+    subtitle_file_name = f"video.{req.lang}.vtt"
+    subtitle_path = os.path.join(TMP_DIR, subtitle_file_name)
+    if not os.path.exists(subtitle_path):
         return {"error": "Subtitle not found."}
 
-    return {"subtitleUrl": subtitle_file, "videoUrl": req.videoUrl}
+    # Return public URL instead of local path
+    public_url = f"https://youtube-live-api-57jx.onrender.com/subtitles/{subtitle_file_name}"
+    return {"subtitleUrl": public_url, "videoUrl": req.videoUrl}
 
 # Download a specific highlight clip
 @app.post("/download-clip")
