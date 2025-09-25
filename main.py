@@ -72,18 +72,21 @@ def download_subtitle(req: VideoRequest):
     public_url = f"https://youtube-live-api-57jx.onrender.com/subtitles/{subtitle_file_name}"
     return {"subtitleUrl": public_url, "videoUrl": req.videoUrl}
 
-# Download a specific highlight clip
 @app.post("/download-clip")
 def download_clip(req: ClipRequest):
     clip_path = os.path.join(TMP_DIR, req.outputName)
+
+    # yt-dlp requires the "*start-end" format inside quotes
     section = f"*{req.start}-{req.end}"
+
     cmd = [
         "yt-dlp",
         req.videoUrl,
-        f"--download-sections={section}",
+        "--download-sections", section,  # ✅ split arg and value
         "-o", clip_path,
         "--cookies", COOKIES_FILE,
     ]
+
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as e:
@@ -93,19 +96,22 @@ def download_clip(req: ClipRequest):
     public_url = f"https://youtube-live-api-57jx.onrender.com/clips/{req.outputName}"
     return {"clipUrl": public_url, "outputName": req.outputName}
 
-# Cleanup endpoint
+
+# Cleanup endpoint (delete all files automatically)
 @app.post("/cleanup")
-def cleanup_files(files: list[str]):
+def cleanup_all():
     deleted = []
-    for f in files:
+    for f in os.listdir(TMP_DIR):
         path = os.path.join(TMP_DIR, f)
-        if os.path.exists(path):
+        if os.path.isfile(path):
             os.remove(path)
             deleted.append(f)
-    return {"deleted": deleted}
+    return {"deleted": deleted, "status": "all cleaned"}
+
 
 # Start server
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
