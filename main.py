@@ -11,7 +11,7 @@ app = FastAPI()
 TMP_DIR = "/tmp/youtube_clips"
 os.makedirs(TMP_DIR, exist_ok=True)
 
-# Path to your cookies file (upload this to Render, next to main.py)
+# Path to your cookies file
 COOKIES_FILE = os.path.join(os.path.dirname(__file__), "cookies.txt")
 
 # Request models
@@ -25,20 +25,28 @@ class ClipRequest(BaseModel):
     end: str
     outputName: str
 
-# Root endpoint for testing
+# Root endpoint
 @app.get("/")
 def root():
     return {"message": "YouTube Live API with cookies is running!"}
 
-# Serve subtitles publicly (for Gemini only)
+# Serve subtitles publicly
 @app.get("/subtitles/{filename}")
 def get_subtitle(filename: str):
     file_path = os.path.join(TMP_DIR, filename)
     if os.path.exists(file_path):
         return FileResponse(file_path, media_type="text/vtt")
-    return {"error": "File not found"}
+    return {"error": "Subtitle not found"}
 
-# Download subtitles only (for Gemini highlights analysis)
+# Serve clips publicly
+@app.get("/clips/{filename}")
+def get_clip(filename: str):
+    file_path = os.path.join(TMP_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type="video/mp4")
+    return {"error": "Clip not found"}
+
+# Download subtitles only (for Gemini)
 @app.post("/download-subtitle")
 def download_subtitle(req: VideoRequest):
     output_file = os.path.join(TMP_DIR, "video.%(ext)s")
@@ -81,7 +89,9 @@ def download_clip(req: ClipRequest):
     except subprocess.CalledProcessError as e:
         return {"error": str(e)}
 
-    return {"clipPath": clip_path, "outputName": req.outputName}
+    # Public clip URL for n8n / YouTube upload
+    public_url = f"https://youtube-live-api-57jx.onrender.com/clips/{req.outputName}"
+    return {"clipUrl": public_url, "outputName": req.outputName}
 
 # Cleanup endpoint
 @app.post("/cleanup")
