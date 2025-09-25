@@ -80,12 +80,15 @@ def download_clip(req: ClipRequest):
     section = f"*{req.start}-{req.end}"
 
     cmd = [
-        "yt-dlp",
-        req.videoUrl,
-        "--download-sections", section,  # ✅ split arg and value
-        "-o", clip_path,
-        "--cookies", COOKIES_FILE,
+    "yt-dlp",
+    req.videoUrl,
+    "--download-sections", section,
+    "-o", clip_path,
+    "--cookies", COOKIES_FILE,
+    "--remux-video", "mp4",   # <--- force mp4
+    "--force-overwrites",     # <--- overwrite if exists
     ]
+
 
     try:
         subprocess.run(cmd, check=True)
@@ -98,6 +101,7 @@ def download_clip(req: ClipRequest):
 
 
 # Cleanup endpoint (delete all files automatically)
+@app.get("/cleanup")
 @app.post("/cleanup")
 def cleanup_all():
     deleted = []
@@ -114,4 +118,5 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
